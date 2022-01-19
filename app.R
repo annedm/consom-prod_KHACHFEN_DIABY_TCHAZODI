@@ -6,6 +6,10 @@ library(ggstream)
 library(lubridate)
 library(ggstream)
 
+# ajout ADM: preparer les donnees necessaires
+# ne pas mettre d'espace dans les noms de fichier!!!
+source("traitement_base.R", encoding = 'UTF-8' )
+
 shinyApp(
   ui = dashboardPage(
     dashboardHeader(
@@ -158,86 +162,69 @@ shinyApp(
     
     ### courbes
     
-    construit_inf <- reactive({
-      if (input$Region_inf == "National")
-      {
-        if (input$Profil_inf == "Tous les profils"){
-          new_data <- data_inf_verticale  %>% filter( variable %in% input$cat_inf, Plage.de.puissance.souscrite == input$plage_puissance_inf, Horodate <= as.POSIXct(input$dates_inf[2]) & Horodate >= as.POSIXct(input$dates_inf[1])) %>% group_by(Horodate, Profil, variable) %>% summarise(value = sum(value))
-          
-          ggplot(data=new_data) +
-            aes(x=as.POSIXct(Horodate), y=value , fill = Profil) +
-            geom_stream(type = "ridge") +
-            theme(plot.title = element_text(hjust = 0.5)) +
-            geom_stream(type = "ridge") + 
-            ggtitle("Evolution de la quantité d'énergie soutirée moyenne (MWh)")+
-            ylab(" ")+
-            xlab("Temps ") + 
-            theme(
-              plot.background = element_rect(fill = "white"),
-              panel.background = element_rect(fill = "white"),
-              axis.line.x = element_line(color = "grey"))
-        } 
-        else {
-          new_data <- data_inf_verticale  %>% filter(Profil %in% input$Profil_inf, variable %in% input$cat_inf, Plage.de.puissance.souscrite == input$plage_puissance_inf, Horodate <= as.POSIXct(input$dates_inf[2]) & Horodate >= as.POSIXct(input$dates_inf[1])) %>% group_by(Horodate, Profil, variable) %>% summarise(value = sum(value))
-          ggplot(data=new_data) +
-            aes(x=as.POSIXct(Horodate), y=value , fill = Profil) +
-            geom_stream(type = "ridge") +
-            theme(plot.title = element_text(hjust = 0.5)) +
-            geom_stream(type = "ridge") + 
-            ggtitle("Evolution de la quantité d'énergie soutirée moyenne (MWh)")+
-            ylab(" ")+
-            xlab("Temps ") + 
-            theme(
-              plot.background = element_rect(fill = "white"),
-              panel.background = element_rect(fill = "white"),
-              axis.line.x = element_line(color = "grey"))
-        }
-      }
-      else {
-        if (input$Profil_inf == "Tous les profils"){
-          new_data <- data_inf_verticale  %>% filter( variable %in% input$cat_inf, Region == input$Region_inf, Plage.de.puissance.souscrite == input$plage_puissance_inf, Horodate <= as.POSIXct(input$dates_inf[2]) & Horodate >= as.POSIXct(input$dates_inf[1])) %>% group_by(Horodate, Profil, variable) %>% summarise(value = sum(value))
-          
-          ggplot(data=new_data) +
-            aes(x=as.POSIXct(Horodate), y=value , fill = Profil) +
-            geom_stream(type = "ridge") +
-            theme(plot.title = element_text(hjust = 0.5)) +
-            geom_stream(type = "ridge") + 
-            ggtitle("Evolution de la quantité d'énergie soutirée moyenne (MWh)")+
-            ylab(" ")+
-            xlab("Temps ") + 
-            theme(
-              plot.background = element_rect(fill = "white"),
-              panel.background = element_rect(fill = "white"),
-              axis.line.x = element_line(color = "grey"))
-        }
-        else {
-          
-          ggplot(data=data_inf_verticale %>% filter(Profil %in% input$Profil_inf, variable %in% input$cat_inf, Region == input$Region_inf, Plage.de.puissance.souscrite == input$plage_puissance_inf, Horodate <= as.POSIXct(input$dates_inf[2]) & Horodate >= as.POSIXct(input$dates_inf[1]))) +
-            aes(x=as.POSIXct(Horodate), y=value , fill = Profil) +
-            geom_stream(type = "ridge") +
-            theme(plot.title = element_text(hjust = 0.5)) +
-            geom_stream(type = "ridge") + 
-            ggtitle("Evolution de la quantité d'énergie soutirée moyenne (MWh)")+
-            ylab(" ")+
-            xlab("Temps ") + 
-            theme(
-              plot.background = element_rect(fill = "white"),
-              panel.background = element_rect(fill = "white"),
-              axis.line.x = element_line(color = "grey"))
-        }
+    construit_df_inf <- reactive({
+      
+      ## commencer par les filtres communs a tous
+      new_data <- data_inf_verticale  %>% 
+        filter(variable %in% input$cat_inf,
+               Plage.de.puissance.souscrite == input$plage_puissance_inf,
+               Horodate <= as.POSIXct(input$dates_inf[2]) &
+                 Horodate >= as.POSIXct(input$dates_inf[1])
+        )
+      
+      # filtrer les regions si besoin
+      if (input$Region_inf != "National"){
+        new_data <- new_data %>% 
+          filter(variable %in% input$cat_inf, 
+                 Region == input$Region_inf)
       }
       
+      # filtrer les profils si besoin
+      if (input$Profil_inf != "Tous les profils"){
+        new_data <- new_data  %>% filter(Profil %in% input$Profil_inf) 
+      }
+      
+      ## agregation commune a tous
+      new_data_grouped <- new_data %>% 
+        group_by(Horodate, Profil) %>%
+        summarise(value = sum(value)) %>%
+        ungroup()
+      
+      new_data_grouped
+      
     })
-    output$inf <- renderPlot({plot(construit_inf())})
+    
+    
+    # plot commun a tous
+    plot_df_inf <- reactive({
+      ggplot(data= construit_df_inf()) +
+        aes(x=as.POSIXct(Horodate), y = value , fill = Profil) +
+        geom_stream(type = "ridge") +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        ggtitle("Evolution de la quantité d'énergie soutirée moyenne (MWh)")+
+        ylab(" ")+
+        xlab("Temps ") + 
+        theme(
+          plot.background = element_rect(fill = "white"),
+          panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(color = "grey"))
+    })
+    
+    output$inf <- renderPlot({plot_df_inf()})
+    
+    
+    # Deuxieme onglet sup -----------------------------------------------------
     
     
     construit_sup <- reactive({
+      
       if (input$nat_reg_sup== "National")
       {
         if (input$profil_sup == "Tous les profils"){
           if (input$secteur_activite_sup == "Tous les secteurs" )
           {
             new_data1 <- data_sup_verticale  %>% filter( variable %in% input$cat_sup, Plage.de.puissance.souscrite == input$plage_puissance_sup, Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])) %>% group_by(Horodate, Profil,Secteur.activite, variable) %>% summarise(value = sum(value))
+            
             ggplot(data=new_data1) +
               aes(x=as.POSIXct(Horodate), y=value , fill = Secteur.activite) +
               geom_stream(type = "ridge") +
@@ -254,6 +241,7 @@ shinyApp(
           }
           
           else{
+            
             new_data1 <- data_sup_verticale  %>% filter(Secteur.activite== input$secteur_activite_sup, variable %in% input$cat_sup, Plage.de.puissance.souscrite == input$plage_puissance_sup, Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])) %>% group_by(Horodate,Profil,  variable) %>% summarise(value = sum(value))
             ggplot(data=new_data1) +
               aes(x=as.POSIXct(Horodate), y=value , fill = Secteur.activite) +
@@ -274,6 +262,7 @@ shinyApp(
           if (input$secteur_activite_sup == "Tous les secteurs" )
           {
             new_data1 <- data_sup_verticale  %>% filter( Profil %in% input$Profil_sup,variable %in% input$cat_sup, Plage.de.puissance.souscrite == input$plage_puissance_sup, Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])) %>% group_by(Horodate,Secteur.activite, variable) %>% summarise(value = sum(value))
+            
             ggplot(data=new_data1) +
               aes(x=as.POSIXct(Horodate), y=value , fill = Secteur.activite) +
               geom_stream(type = "ridge") +
@@ -287,10 +276,16 @@ shinyApp(
                 panel.background = element_rect(fill = "white"),
                 axis.line.x = element_line(color = "grey"))
             
-          }
-          
-          else{
-            new_data1 <- data_sup_verticale  %>% filter(Profil %in% input$Profil_sup,Profil %in% input$Profil_sup,Secteur.activite== input$secteur_activite_sup, variable %in% input$cat_sup, Plage.de.puissance.souscrite == input$plage_puissance_sup, Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])) %>% group_by(Horodate,  variable) %>% summarise(value = sum(value))
+          }else{
+            new_data1 <- data_sup_verticale  %>% 
+              filter(Profil %in% input$Profil_sup,
+                     Secteur.activite== input$secteur_activite_sup,
+                     variable %in% input$cat_sup, 
+                     Plage.de.puissance.souscrite == input$plage_puissance_sup, 
+                     Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])
+              ) %>% group_by(Horodate,  variable, Secteur.activite) %>% summarise(value = sum(value))
+            
+            
             ggplot(data=new_data1) +
               aes(x=as.POSIXct(Horodate), y=value , fill = Secteur.activite) +
               geom_stream(type = "ridge") +
@@ -312,6 +307,8 @@ shinyApp(
           if (input$secteur_activite_sup == "Tous les secteurs" )
           {
             new_data1 <- data_sup_verticale  %>% filter( Region == input$nat_reg_sup,variable %in% input$cat_sup, Plage.de.puissance.souscrite == input$plage_puissance_sup, Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])) %>% group_by(Horodate, Profil,Secteur.activite, variable) %>% summarise(value = sum(value))
+            
+            
             ggplot(data=new_data1) +
               aes(x=as.POSIXct(Horodate), y=value , fill = Secteur.activite) +
               geom_stream(type = "ridge") +
@@ -330,6 +327,8 @@ shinyApp(
           
           else{
             new_data1 <- data_sup_verticale  %>% filter(Region == input$nat_reg_sup, Secteur.activite== input$secteur_activite_sup, variable %in% input$cat_sup, Plage.de.puissance.souscrite == input$plage_puissance_sup, Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])) %>% group_by(Horodate, Profil, variable) %>% summarise(value = sum(value))
+            
+            
             ggplot(data=new_data1) +
               aes(x=as.POSIXct(Horodate), y=value , fill = Secteur.activite) +
               geom_stream(type = "ridge") +
@@ -349,6 +348,7 @@ shinyApp(
           if (input$secteur_activite_sup == "Tous les secteurs" )
           {
             new_data1 <- data_sup_verticale  %>% filter( Region == input$nat_reg_sup, Profil %in% input$Profil_sup,variable %in% input$cat_sup, Plage.de.puissance.souscrite == input$plage_puissance_sup, Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])) %>% group_by(Horodate,Secteur.activite, variable) %>% summarise(value = sum(value))
+            
             ggplot(data=new_data1) +
               aes(x=as.POSIXct(Horodate), y=value , fill = Secteur.activite) +
               geom_stream(type = "ridge") +
@@ -366,7 +366,15 @@ shinyApp(
           }
           
           else{
-            new_data1 <- data_sup_verticale  %>% filter(Region == input$nat_reg_sup, Profil %in% input$Profil_sup,Secteur.activite== input$secteur_activite_sup, variable %in% input$cat_sup, Plage.de.puissance.souscrite == input$plage_puissance_sup, Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])) 
+            new_data1 <- data_sup_verticale  %>%
+              filter(Region == input$nat_reg_sup, 
+                     Profil %in% input$Profil_sup,
+                     Secteur.activite== input$secteur_activite_sup, 
+                     variable %in% input$cat_sup, 
+                     Plage.de.puissance.souscrite == input$plage_puissance_sup, 
+                     Horodate <= as.POSIXct(input$dates_sup[2]) & 
+                       Horodate >= as.POSIXct(input$dates_sup[1])) 
+            
             ggplot(data=new_data1) +
               aes(x=as.POSIXct(Horodate), y=value , fill = Secteur.activite) +
               geom_stream(type = "ridge") +
@@ -388,6 +396,10 @@ shinyApp(
     
     
     output$sup <- renderPlot({plot(construit_sup())})   
+    
+    
+    # Troisieme onglet prod ---------------------------------------------------
+    
     
     construit_prod <- reactive({
       if (input$nat_reg_prod == "National")
@@ -510,6 +522,7 @@ shinyApp(
         }
       }
       df <- data.frame(new_data3)
+      ##NON !!!
       write.csv(df, "C:\\Users\\Goldenshop.ma\\Documents\\data_prod.csv")
     })
     
@@ -519,7 +532,15 @@ shinyApp(
         if (input$profil_sup == "Tous les profils"){
           if (input$secteur_activite_sup == "Tous les secteurs" )
           {
-            new_data1 <- data_sup_verticale  %>% filter( variable %in% input$cat_sup, Plage.de.puissance.souscrite == input$plage_puissance_sup, Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])) %>% group_by(Horodate, Profil,Secteur.activite, variable) %>% summarise(value = sum(value))
+            new_data1 <- data_sup_verticale  %>% filter(
+              variable %in% input$cat_sup, 
+              Plage.de.puissance.souscrite == input$plage_puissance_sup,
+              Horodate <= as.POSIXct(input$dates_sup[2]) &
+                Horodate >= as.POSIXct(input$dates_sup[1])
+            ) %>% group_by(Horodate, 
+                           Profil,
+                           Secteur.activite, 
+                           variable) %>% summarise(value = sum(value))
             
             
           }
@@ -533,13 +554,24 @@ shinyApp(
         else {
           if (input$secteur_activite_sup == "Tous les secteurs" )
           {
-            new_data1 <- data_sup_verticale  %>% filter( Profil %in% input$Profil_sup,variable %in% input$cat_sup, Plage.de.puissance.souscrite == input$plage_puissance_sup, Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])) %>% group_by(Horodate,Secteur.activite, variable) %>% summarise(value = sum(value))
+            new_data1 <- data_sup_verticale  %>% filter(
+              Profil %in% input$Profil_sup,
+              variable %in% input$cat_sup,
+              Plage.de.puissance.souscrite == input$plage_puissance_sup,
+              Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])
+            ) %>% group_by(Horodate,Secteur.activite, variable) %>% summarise(value = sum(value))
             
             
           }
           
           else{
-            new_data1 <- data_sup_verticale  %>% filter(Profil %in% input$Profil_sup,Profil %in% input$Profil_sup,Secteur.activite== input$secteur_activite_sup, variable %in% input$cat_sup, Plage.de.puissance.souscrite == input$plage_puissance_sup, Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])) %>% group_by(Horodate,  variable) %>% summarise(value = sum(value))
+            new_data1 <- data_sup_verticale  %>%
+              filter(Profil %in% input$Profil_sup,Profil %in% input$Profil_sup,
+                     Secteur.activite== input$secteur_activite_sup, 
+                     variable %in% input$cat_sup,
+                     Plage.de.puissance.souscrite == input$plage_puissance_sup,
+                     Horodate <= as.POSIXct(input$dates_sup[2]) & Horodate >= as.POSIXct(input$dates_sup[1])
+              ) %>% group_by(Horodate,  variable) %>% summarise(value = sum(value))
             
           }
         }
